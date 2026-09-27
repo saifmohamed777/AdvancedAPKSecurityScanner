@@ -1,0 +1,285 @@
+import os
+import re
+import zipfile
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+try:
+    from androguard.core.apk import APK
+except ImportError:  # pragma: no cover
+    APK = None
+
+
+class APKScanner:
+    def __init__(self, apk_path):
+        self.apk_path = apk_path
+        self.apk_name = os.path.basename(apk_path)
+
+    def scan(self):
+        if not os.path.exists(self.apk_path):
+            raise FileNotFoundError(f"APK not found: {self.apk_path}")
+
+        manifest_data = self._read_manifest_xml()
+        permissions = self._extract_permissions(manifest_data)
+        exported_components = self._extract_exported_components(manifest_data)
+        findings = self._collect_findings(manifest_data, permissions, exported_components)
+
+        report = {
+            "apk_name": self.apk_name,
+            "scan_time": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "package_name": self._extract_package_name(manifest_data),
+            "version_name": self._extract_version_name(manifest_data),
+            "version_code": self._extract_version_code(manifest_data),
+            "permissions": permissions,
+            "exported_components": exported_components,
+            "findings": findings,
+            "risk_score": self._calculate_risk_score(findings),
+            "risk_level": self._risk_level(self._calculate_risk_score(findings)),
+        }
+
+        return report
+
+    def _read_manifest_xml(self):
+        try:
+            with zipfile.ZipFile(self.apk_path) as zf:
+                manifest_name = None
+                for name in zf.namelist():
+                    if name.endswith("AndroidManifest.xml"):
+                        manifest_name = name
+                        break
+                if not manifest_name:
+                    return {}
+                data = zf.read(manifest_name)
+                return ET.fromstring(data)
+        except Exception:
+            return {}
+
+    def _extract_package_name(self, manifest_root):
+        if not manifest_root:
+            return "unknown"
+        return manifest_root.attrib.get("package", "unknown")
+
+    def _extract_version_name(self, manifest_root):
+        if not manifest_root:
+            return "unknown"
+        for elem in manifest_root.findall("./manifest"):
+            return elem.attrib.get("versionName", "unknown")
+        return "unknown"
+
+    def _extract_version_code(self, manifest_root):
+        if not manifest_root:
+            return "unknown"
+        for elem in manifest_root.findall("./manifest"):
+            return elem.attrib.get("versionCode", "unknown")
+        return "unknown"
+
+    def _extract_permissions(self, manifest_root):
+        if not manifest_root:
+            return []
+
+        permissions = []
+        android_ns = "http://schemas.android.com/apk/res/android"
+
+        if APK is not None:
+            try:
+                apk = APK(self.apk_path)
+                permissions = apk.get_permissions() or []
+                return permissions
+            except Exception:
+                pass
+
+        for perm in manifest_root.findall("./uses-permission"):
+            permission_name = perm.attrib.get(f"{{{android_ns}}}name")
+            if permission_name:
+                permissions.append(permission_name)
+        return sorted(set(permissions))
+
+    def _extract_exported_components(self, manifest_root):
+        if not manifest_root:
+            return []
+
+        android_ns = "http://schemas.android.com/apk/res/android"
+        safe_tags = ["activity", "service", "receiver", "provider"]
+        results = []
+
+        for tag in safe_tags:
+            for elem in manifest_root.iter(tag):
+                name = elem.attrib.get(f"{{{android_ns}}}name")
+                exported = elem.attrib.get(f"{{{android_ns}}}exported")
+                permission = elem.attrib.get(f"{{{android_ns}}}permission")
+                if not name:
+                    continue
+                results.append({
+                    "type": tag,
+                    "name": name,
+                    "exported": exported,
+                    "permission": permission,
+                })
+        return results
+
+    def _collect_findings(self, manifest_root, permissions, exported_components):
+        findings = []
+        android_ns = "http://schemas.android.com/apk/res/android"
+
+        if manifest_root is None or len(manifest_root) == 0:
+            return [{
+                "severity": "medium",
+                "title": "Manifest could not be parsed",
+                "description": "The AndroidManifest.xml file could not be parsed. Static analysis coverage may be incomplete.",
+            }]
+
+        application_elem = manifest_root.find("application")
+        if application_elem is not None:
+            allow_backup = application_elem.attrib.get(f"{{{android_ns}}}allowBackup")
+            cleartext = application_elem.attrib.get(f"{{{android_ns}}}usesCleartextTraffic")
+            debuggable = application_elem.attrib.get(f"{{{android_ns}}}debuggable")
+
+            if allow_backup is None or allow_backup.lower() == "true":
+                findings.append({
+                    "severity": "high",
+                    "title": "Application data backup is enabled",
+                    "description": "allowBackup is enabled, which may expose sensitive app data to backups or physical device compromise.",
+                })
+
+            if cleartext and cleartext.lower() == "true":
+                findings.append({
+                    "severity": "high",
+                    "title": "Cleartext traffic is enabled",
+                    "description": "usesCleartextTraffic is enabled, allowing unencrypted HTTP traffic.",
+                })
+
+            if debuggable and debuggable.lower() == "true":
+                findings.append({
+                    "severity": "medium",
+                    "title": "Application is debuggable",
+                    "description": "The app may expose debugging features in production builds.",
+                })
+
+        risky_permissions = [
+            "android.permission.READ_SMS",
+            "android.permission.SEND_SMS",
+            "android.permission.CALL_PHONE",
+            "android.permission.RECORD_AUDIO",
+            "android.permission.CAMERA",
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION",
+            "android.permission.WRITE_EXTERNAL_STORAGE",
+            "android.permission.READ_CONTACTS",
+            "android.permission.READ_CALL_LOG",
+            "android.permission.READ_PHONE_STATE",
+            "android.permission.GET_ACCOUNTS",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+        ]
+
+        for permission in permissions:
+            if permission in risky_permissions:
+                findings.append({
+                    "severity": "medium",
+                    "title": "Sensitive permission requested",
+                    "description": f"The app requests sensitive permission: {permission}",
+                    "permission": permission,
+                })
+
+        for component in exported_components:
+            exported = component.get("exported")
+            if exported and str(exported).lower() == "true":
+                findings.append({
+                    "severity": "high",
+                    "title": "Exported component is publicly accessible",
+                    "description": f"{component['type']} {component['name']} is exported and may be reachable externally.",
+                    "component": component,
+                })
+
+        if any("android.permission.INTERNET" in p for p in permissions):
+            insecure_urls = self._find_insecure_http_urls()
+            if insecure_urls:
+                findings.append({
+                    "severity": "high",
+                    "title": "Insecure HTTP endpoints detected",
+                    "description": "The APK references plaintext HTTP endpoints, which may expose sensitive data.",
+                    "urls": insecure_urls[:10],
+                })
+
+        secrets = self._find_hardcoded_secrets()
+        if secrets:
+            findings.append({
+                "severity": "critical",
+                "title": "Potential secrets or credentials embedded in APK",
+                "description": "Hardcoded credentials or tokens were found in APK contents.",
+                "matches": secrets[:10],
+            })
+
+        if not findings:
+            findings.append({
+                "severity": "low",
+                "title": "No obvious high-risk indicators found",
+                "description": "No severe issues were detected by the static checks in this scan.",
+            })
+
+        return findings
+
+    def _find_insecure_http_urls(self):
+        patterns = [r"https?://[^\s\"'<>]+"]
+        matches = set()
+        try:
+            with zipfile.ZipFile(self.apk_path) as zf:
+                for file_name in zf.namelist():
+                    if not file_name.lower().endswith((".xml", ".txt", ".smali", ".java", ".kt", ".properties", ".json")):
+                        continue
+                    try:
+                        data = zf.read(file_name)
+                        text = data.decode("utf-8", errors="ignore")
+                    except Exception:
+                        continue
+                    for pattern in patterns:
+                        matches.update(re.findall(pattern, text, flags=re.IGNORECASE))
+        except Exception:
+            pass
+        return sorted(matches)
+
+    def _find_hardcoded_secrets(self):
+        secret_patterns = [
+            r"(?i)(api[_-]?key|secret|token|password|private[_-]?key|client[_-]?secret|aws[_-]?access[_-]?key(?:_id)?)\s*[:=]\s*[\"']?([A-Za-z0-9/+=._:-]{8,})",
+            r"(?i)Bearer\s+[A-Za-z0-9._~+/-]+=*",
+            r"(?i)(authorization|auth[_-]?token)\s*[:=]\s*[\"']?[A-Za-z0-9._~+/-]{12,}"
+        ]
+        matches = []
+        try:
+            with zipfile.ZipFile(self.apk_path) as zf:
+                for file_name in zf.namelist():
+                    if not file_name.lower().endswith((".xml", ".txt", ".smali", ".java", ".kt", ".properties", ".json", ".gradle")):
+                        continue
+                    try:
+                        data = zf.read(file_name)
+                        text = data.decode("utf-8", errors="ignore")
+                    except Exception:
+                        continue
+                    for pattern in secret_patterns:
+                        result = re.findall(pattern, text, flags=re.IGNORECASE)
+                        for item in result:
+                            if isinstance(item, tuple):
+                                label, value = item
+                                matches.append({"file": file_name, "label": label, "value": value[:40]})
+                            else:
+                                matches.append({"file": file_name, "value": str(item)[:40]})
+        except Exception:
+            pass
+        return matches
+
+    def _calculate_risk_score(self, findings):
+        weights = {"critical": 30, "high": 20, "medium": 10, "low": 3}
+        score = 0
+        for entry in findings:
+            score += weights.get(entry.get("severity", "low"), 5)
+        return min(score, 100)
+
+    def _risk_level(self, score):
+        if score >= 80:
+            return "critical"
+        if score >= 60:
+            return "high"
+        if score >= 30:
+            return "medium"
+        return "low"

@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Advanced APK Security Scanner</h1>
+    <p class="subtitle">Upload an APK for static security analysis</p>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/scan" enctype="multipart/form-data" class="upload-form">
+        <label for="apk_file">Choose APK</label>
+        <input type="file" id="apk_file" name="apk_file" accept=".apk" required>
+        <button type="submit">Analyze APK</button>
+    </form>
+
+    <div class="features">
+        <div class="card">
+            <h3>Manifest Review</h3>
+            <p>Check permissions, exported components, backup flags, and cleartext traffic.</p>
+        </div>
+        <div class="card">
+            <h3>Secrets Detection</h3>
+            <p>Search APK contents for embedded tokens, keys, and credentials.</p>
+        </div>
+        <div class="card">
+            <h3>Risk Scoring</h3>
+            <p>Classify issues by severity and compute a single risk score.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

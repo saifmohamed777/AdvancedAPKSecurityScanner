@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>APK Scan Report</h1>
+    <p><strong>APK:</strong> {{ report.apk_name }}</p>
+    <p><strong>Package:</strong> {{ report.package_name }}</p>
+    <p><strong>Version:</strong> {{ report.version_name }} ({{ report.version_code }})</p>
+
+    <div class="summary">
+        <div class="metric">
+            <span>Risk Score</span>
+            <strong>{{ report.risk_score }}</strong>
+        </div>
+        <div class="metric">
+            <span>Risk Level</span>
+            <strong>{{ report.risk_level }}</strong>
+        </div>
+        <div class="metric">
+            <span>Findings</span>
+            <strong>{{ report.findings|length }}</strong>
+        </div>
+    </div>
+
+    <h2>Permissions</h2>
+    {% if report.permissions %}
+    <table>
+        <thead>
+            <tr><th>Permission</th></tr>
+        </thead>
+        <tbody>
+            {% for permission in report.permissions %}
+            <tr><td>{{ permission }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No permissions found.</p>
+    {% endif %}
+
+    <h2>Findings</h2>
+    {% for finding in report.findings %}
+    <div class="finding">
+        <span class="severity {{ finding.severity }}">{{ finding.severity }}</span>
+        <h3>{{ finding.title }}</h3>
+        <p>{{ finding.description }}</p>
+        {% if finding.permission %}
+        <p><strong>Permission:</strong> {{ finding.permission }}</p>
+        {% endif %}
+        {% if finding.urls %}
+        <p><strong>URLs:</strong> {{ finding.urls | join(', ') }}</p>
+        {% endif %}
+        {% if finding.matches %}
+        {% for match in finding.matches %}
+        <p><strong>Match:</strong> {{ match.file }} -> {{ match.label or 'value' }}: {{ match.value }}</p>
+        {% endfor %}
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <h2>Exported Components</h2>
+    {% if report.exported_components %}
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Name</th>
+                <th>Exported</th>
+                <th>Permission</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for component in report.exported_components %}
+            <tr>
+                <td>{{ component.type }}</td>
+                <td>{{ component.name }}</td>
+                <td>{{ component.exported }}</td>
+                <td>{{ component.permission or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No exported components detected.</p>
+    {% endif %}
+
+    <h2>Report File</h2>
+    <p><a href="{{ report.report_file }}" target="_blank">Open JSON report</a></p>
+</div>
+{% endblock %}
