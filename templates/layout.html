@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Advanced APK Security Scanner{% endblock %}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0b1020;
+            color: #edf2ff;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #ffffff;
+        }
+        .subtitle {
+            color: #b7c5df;
+        }
+        form.upload-form {
+            background: #111b2d;
+            border: 1px solid #223352;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        input[type="file"] {
+            margin: 14px 0;
+            display: block;
+            color: #dfeaff;
+        }
+        button {
+            background: linear-gradient(135deg, #4f8cff, #6d5ef7);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .card {
+            background: #111b2d;
+            border: 1px solid #21314e;
+            border-radius: 12px;
+            padding: 18px;
+        }
+        .summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 24px;
+        }
+        .metric {
+            min-width: 150px;
+            background: #111b2d;
+            border: 1px solid #21314e;
+            border-radius: 10px;
+            padding: 16px 18px;
+        }
+        .metric strong {
+            display: block;
+            font-size: 28px;
+            margin-top: 6px;
+        }
+        .alert {
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .alert-danger {
+            background: rgba(255, 86, 86, 0.12);
+            border: 1px solid rgba(255, 86, 86, 0.4);
+            color: #ffd1d1;
+        }
+        .finding {
+            background: #111b2d;
+            border-left: 4px solid #6d5ef7;
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin: 16px 0;
+        }
+        .severity {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .severity.critical { background: #d61a46; color: white; }
+        .severity.high { background: #ff8c42; color: white; }
+        .severity.medium { background: #f5c453; color: #221908; }
+        .severity.low { background: #3cae7a; color: white; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+        }
+        th, td {
+            border-bottom: 1px solid #21314e;
+            text-align: left;
+            padding: 10px;
+        }
+        a {
+            color: #95c7ff;
+        }
+    </style>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>
